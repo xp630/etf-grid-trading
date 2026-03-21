@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETF网格交易监控</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #00d4ff;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .card h2 {
+            font-size: 16px;
+            color: #888;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #222;
+        }
+        .stat:last-child { border-bottom: none; }
+        .stat-label { color: #888; }
+        .stat-value { font-weight: bold; }
+        .positive { color: #00ff88; }
+        .negative { color: #ff4444; }
+        .warning { color: #ffaa00; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #333;
+        }
+        th { color: #888; font-weight: normal; }
+        .buy { color: #00ff88; }
+        .sell { color: #ff4444; }
+        .refresh {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #00d4ff;
+            color: #1a1a2e;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,212,255,0.3);
+        }
+        .refresh:hover { background: #00b8d4; }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+        .status-safe { background: #00ff8820; color: #00ff88; }
+        .status-warning { background: #ffaa0020; color: #ffaa00; }
+        .status-danger { background: #ff444420; color: #ff4444; }
+        .price-display {
+            font-size: 36px;
+            font-weight: bold;
+            text-align: center;
+            padding: 20px;
+            color: #00d4ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 ETF网格交易监控</h1>
+
+        <div class="grid">
+            <!-- 当前价格 -->
+            <div class="card">
+                <h2>当前行情</h2>
+                <div class="price-display" id="current-price">--</div>
+                <div class="stat">
+                    <span class="stat-label">ETF代码</span>
+                    <span class="stat-value" id="etf-code">510300</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">市场状态</span>
+                    <span class="stat-value" id="market-status">--</span>
+                </div>
+            </div>
+
+            <!-- 账户状态 -->
+            <div class="card">
+                <h2>账户概览</h2>
+                <div class="stat">
+                    <span class="stat-label">总资产</span>
+                    <span class="stat-value" id="total-assets">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">持仓市值</span>
+                    <span class="stat-value" id="position-value">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">可用资金</span>
+                    <span class="stat-value" id="cash">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">今日盈亏</span>
+                    <span class="stat-value" id="daily-pnl">--</span>
+                </div>
+            </div>
+
+            <!-- 风控状态 -->
+            <div class="card">
+                <h2>风控状态</h2>
+                <div class="stat">
+                    <span class="stat-label">日亏损限额</span>
+                    <span class="stat-value" id="daily-limit">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">日亏损剩余</span>
+                    <span class="stat-value" id="daily-remaining">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">止损线</span>
+                    <span class="stat-value" id="stop-loss">--</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">状态</span>
+                    <span class="stat-value" id="risk-status">--</span>
+                </div>
+            </div>
+
+            <!-- 持仓明细 -->
+            <div class="card">
+                <h2>当前持仓</h2>
+                <div id="positions-container">
+                    <table id="positions-table">
+                        <thead>
+                            <tr>
+                                <th>标的</th>
+                                <th>数量</th>
+                                <th>成本</th>
+                                <th>当前价</th>
+                                <th>盈亏</th>
+                            </tr>
+                        </thead>
+                        <tbody id="positions-body">
+                            <tr><td colspan="5" style="text-align:center;color:#888">暂无持仓</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 交易记录 -->
+            <div class="card" style="grid-column: span 2;">
+                <h2>最近交易</h2>
+                <table id="trades-table">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>标的</th>
+                            <th>操作</th>
+                            <th>价格</th>
+                            <th>数量</th>
+                            <th>金额</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trades-body">
+                        <tr><td colspan="6" style="text-align:center;color:#888">暂无交易记录</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <button class="refresh" onclick="refreshData()">🔄 刷新</button>
+
+    <script>
+        let currentPrice = 0;
+
+        async function refreshData() {
+            try {
+                const resp = await fetch('/api/status');
+                const json = await resp.json();
+
+                if (!json.success) {
+                    console.error('API error:', json.error);
+                    return;
+                }
+
+                const data = json.data;
+                currentPrice = data.current_price;
+
+                // 更新价格
+                document.getElementById('current-price').textContent =
+                    data.current_price ? `¥${data.current_price.toFixed(3)}` : '--';
+
+                // 更新账户
+                document.getElementById('total-assets').textContent =
+                    `¥${data.total_assets.toFixed(2)}`;
+                document.getElementById('position-value').textContent =
+                    `¥${data.position_value.toFixed(2)}`;
+                document.getElementById('cash').textContent =
+                    `¥${data.cash.toFixed(2)}`;
+
+                const pnlEl = document.getElementById('daily-pnl');
+                pnlEl.textContent = `¥${data.daily_pnl.toFixed(2)}`;
+                pnlEl.className = 'stat-value ' + (data.daily_pnl >= 0 ? 'positive' : 'negative');
+
+                // 更新风控
+                const risk = data.risk_status;
+                document.getElementById('daily-limit').textContent =
+                    `¥${risk.daily_limit}`;
+                document.getElementById('daily-remaining').textContent =
+                    `¥${risk.daily_remaining.toFixed(2)}`;
+                document.getElementById('stop-loss').textContent =
+                    `¥${risk.stop_loss_line}`;
+
+                const riskStatusEl = document.getElementById('risk-status');
+                if (risk.daily_remaining < 0) {
+                    riskStatusEl.innerHTML = '<span class="status-badge status-danger">触及止损</span>';
+                } else if (risk.daily_remaining < 20) {
+                    riskStatusEl.innerHTML = '<span class="status-badge status-warning">接近限额</span>';
+                } else {
+                    riskStatusEl.innerHTML = '<span class="status-badge status-safe">正常</span>';
+                }
+
+                // 更新持仓
+                updatePositions(data.positions, data.current_price);
+
+                // 更新交易记录
+                updateTrades(data.recent_trades);
+
+            } catch (err) {
+                console.error('Refresh error:', err);
+            }
+        }
+
+        function updatePositions(positions, currentPrice) {
+            const tbody = document.getElementById('positions-body');
+
+            if (!positions || positions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888">暂无持仓</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = positions.map(p => {
+                const pnl = p.pnl;
+                const pnlClass = pnl >= 0 ? 'positive' : 'negative';
+                return `<tr>
+                    <td>${p.symbol}</td>
+                    <td>${p.quantity}</td>
+                    <td>¥${p.avg_price.toFixed(3)}</td>
+                    <td>¥${currentPrice.toFixed(3)}</td>
+                    <td class="${pnlClass}">¥${pnl.toFixed(2)}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function updateTrades(trades) {
+            const tbody = document.getElementById('trades-body');
+
+            if (!trades || trades.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888">暂无交易记录</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = trades.map(t => {
+                const actionClass = t.action === 'buy' ? 'buy' : 'sell';
+                const actionText = t.action === 'buy' ? '买入' : '卖出';
+                return `<tr>
+                    <td>${t.timestamp.split('T')[0]}</td>
+                    <td>${t.symbol}</td>
+                    <td class="${actionClass}">${actionText}</td>
+                    <td>¥${t.price.toFixed(3)}</td>
+                    <td>${t.quantity}</td>
+                    <td>¥${(t.price * t.quantity).toFixed(2)}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // 初始加载
+        refreshData();
+
+        // 每10秒自动刷新
+        setInterval(refreshData, 10000);
+    </script>
+</body>
+</html>
