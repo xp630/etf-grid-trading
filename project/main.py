@@ -57,6 +57,7 @@ class TradingSystem:
 
         # 运行状态
         self.running = False
+        self._last_summary_date: str = None  # 上次发送每日总结的日期
 
     def signal_handler(self, signum, frame):
         """处理退出信号"""
@@ -79,6 +80,46 @@ class TradingSystem:
             now.weekday() < 5 and  # 周一到周五
             open_time <= current_time <= close_time
         )
+
+    def _is_market_close_time(self) -> bool:
+        """检查是否接近收盘时间（14:55-15:00）"""
+        now = datetime.now()
+        current_time = now.time()
+        close_time = datetime.strptime(
+            self.config['market']['trading_hours']['cancel_before'], '%H:%M'
+        ).time()
+        # 在cancel_before时间后5分钟内
+        return current_time >= close_time
+
+    def _send_daily_summary(self):
+        """发送每日总结"""
+        today = datetime.now().strftime('%Y-%m-%d')
+        if self._last_summary_date == today:
+            return  # 今天已发送
+
+        daily_pnl = self.tracker.get_daily_pnl()
+        positions = self.tracker.get_all_positions()
+        trades = self.tracker.get_trades(limit=50)
+
+        success = self.notifier.send_daily_summary(
+            daily_pnl=daily_pnl,
+            trades=[{
+                'action': t['action'],
+                'symbol': t['symbol'],
+                'price': t['price'],
+                'quantity': t['quantity']
+            } for t in trades],
+            positions={k: {
+                'quantity': v.quantity,
+                'avg_price': v.avg_price
+            } for k, v in positions.items()}
+        )
+
+        if success:
+            self._last_summary_date = today
+            logger.info("每日总结已发送")
+        else:
+            logger.warning("每日总结发送失败")
 
     def run(self):
         """运行交易系统"""
@@ -138,15 +179,21 @@ class TradingSystem:
                 if risk_status['daily_remaining'] < 0:
                     logger.warning("触及日亏损限制，停止交易")
                     self.notifier.send_risk_warning('daily_loss', abs(daily_pnl))
-                    # 等待到下一个交易日
+                    # 发送每日总结后等待到下一个交易日
+                    self._send_daily_summary()
                     time.sleep(3600)
                     continue
 
                 if total_assets < risk_status['stop_loss_line']:
                     logger.warning("触及总止损线，永久停止交易")
                     self.notifier.send_stop_loss(total_assets)
+                    self._send_daily_summary()
                     self.running = False
                     break
+
+                # 检查是否接近收盘时间，发送每日总结
+                if self._is_market_close_time():
+                    self._send_daily_summary()
 
                 # 每10秒循环
                 time.sleep(10)
