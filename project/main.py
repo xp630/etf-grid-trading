@@ -154,11 +154,17 @@ class TradingSystem:
         else:
             logger.warning("每日总结发送失败")
 
+    def _mask_string(self, s: str) -> str:
+        """掩码处理，只显示前2位和后2位"""
+        if not s or len(s) <= 4:
+            return '****'
+        return s[:2] + '*' * (len(s) - 4) + s[-2:]
+
     def _log_config(self):
         """打印所有配置信息"""
         logger.info("=" * 50)
         logger.info("【网格配置】")
-        logger.info(f"  基准价: {self.config['market'].get('etf_code', 'N/A')}")
+        logger.info(f"  ETF代码: {self.config['market'].get('etf_code', 'N/A')}")
         logger.info(f"  网格档位: {self.config['grid'].get('levels', 'N/A')}")
         logger.info(f"  网格间距: {self.config['grid'].get('spacing', 'N/A')}")
         logger.info(f"  每格金额: {self.config['grid'].get('unit_size', 'N/A')}")
@@ -171,7 +177,12 @@ class TradingSystem:
 
         logger.info("【通知配置】")
         server_key = self.config['notification'].get('server酱_key', '')
-        logger.info(f"  Server酱: {'已配置' if server_key else '未配置'}")
+        logger.info(f"  Server酱Key: {self._mask_string(server_key) if server_key else '未配置'}")
+
+        logger.info("【聚宽账号】")
+        creds = self.config.get('credentials', {})
+        logger.info(f"  用户名: {self._mask_string(creds.get('username', '')) if creds.get('username') else '未配置'}")
+        logger.info(f"  密码: {self._mask_string(creds.get('password', '')) if creds.get('password') else '未配置'}")
 
         logger.info("【数据源】")
         logger.info(f"  提供商: {self.config.get('data_source', {}).get('provider', 'N/A')}")
