@@ -36,6 +36,22 @@ echo   help          - 显示帮助
 echo.
 exit /b 0
 
+:example
+echo ========================================
+echo    ETF网格交易系统管理器 - 使用示例
+echo ========================================
+echo.
+echo 示例:
+echo   run.bat start all          - 启动交易系统 + Web面板
+echo   run.bat start streamlit    - 启动Streamlit面板
+echo   run.bat stop web           - 停止Web面板
+echo   run.bat restart main       - 重启交易系统
+echo   run.bat status             - 查看服务状态
+echo   run.bat log                - 查看日志
+echo   run.bat help               - 显示完整帮助
+echo.
+exit /b 0
+
 :status
 echo ========================================
 echo    服务状态
@@ -157,7 +173,7 @@ call :start_all
 exit /b 0
 
 :main
-if "%~1"=="" goto :usage
+if "%~1"=="" goto :example
 if "%~1"=="help" goto :usage
 if "%~1"=="start" (
     if "%~2"=="main" goto :start_main

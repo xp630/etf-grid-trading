@@ -156,6 +156,27 @@ restart_all() {
     start_all
 }
 
+example() {
+    echo "========================================"
+    echo "   ETF网格交易系统管理器 - 使用示例"
+    echo "========================================"
+    echo ""
+    echo "示例:"
+    echo "  ./run.sh start all          - 启动交易系统 + Web面板"
+    echo "  ./run.sh start streamlit    - 启动Streamlit面板"
+    echo "  ./run.sh stop web           - 停止Web面板"
+    echo "  ./run.sh restart main       - 重启交易系统"
+    echo "  ./run.sh status             - 查看服务状态"
+    echo "  ./run.sh log                - 查看日志"
+    echo "  ./run.sh help               - 显示完整帮助"
+    echo ""
+}
+
+if [ -z "$1" ]; then
+    example
+    exit 0
+fi
+
 case "$1" in
     help|--help|-h)
         usage
