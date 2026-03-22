@@ -5,7 +5,23 @@ import streamlit as st
 import requests
 import yaml
 import os
+import subprocess
 from datetime import datetime
+
+
+def restart_trading_system():
+    """重启交易系统"""
+    try:
+        # 杀掉现有main.py进程
+        subprocess.run(['taskkill', '/F', '/IM', 'python.exe', '/FI', 'WINDOWTITLE eq *main.py*'],
+                      capture_output=True, stderr=subprocess.DEVNULL)
+        import time
+        time.sleep(2)
+        # 启动新的交易系统
+        subprocess.Popen(['python', 'main.py'], cwd=os.path.dirname(os.path.dirname(__file__)))
+        return True
+    except:
+        return False
 
 st.set_page_config(
     page_title="ETF网格交易监控",
@@ -304,9 +320,17 @@ elif page == "⚙️ 设置":
         if submitted:
             result = put_api('http://127.0.0.1:5000/api/config/credentials', {'username': username, 'password': password})
             if result and result.get('success'):
-                st.success("保存成功! 重启服务后生效")
+                st.success("保存成功!")
             else:
                 st.error("保存失败: 无法连接到交易系统")
+
+    if st.button("🔄 重启交易系统", use_container_width=True):
+        with st.spinner("正在重启..."):
+            success = restart_trading_system()
+            if success:
+                st.success("交易系统已重启!")
+            else:
+                st.error("重启失败，请手动重启")
 
     st.divider()
 
