@@ -349,6 +349,110 @@ def api_update_grid_config():
         }), 500
 
 
+@app.route('/api/config/notification', methods=['PUT'])
+def api_update_notification_config():
+    """
+    更新通知配置
+
+    请求体:
+    {
+        "server酱_key": "SCUxxx"
+    }
+    """
+    try:
+        data = request.get_json()
+        server酱_key = data.get('server酱_key', '')
+
+        # 更新配置
+        _state['config']['notification']['server酱_key'] = server酱_key
+
+        # 重新初始化通知器
+        _state['notifier'] = Notifier(server酱_key)
+
+        # 保存到文件
+        config_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'config.yaml'
+        )
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        config['notification']['server酱_key'] = server酱_key
+        with open(config_path, 'w', encoding='utf-8') as f:
+            yaml.dump(config, f, allow_unicode=True)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'notification': {
+                    'server酱_key': '****' if server酱_key else '',
+                    'enabled': bool(server酱_key)
+                }
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/config/credentials', methods=['PUT'])
+def api_update_credentials():
+    """
+    更新聚宽账号凭证
+
+    请求体:
+    {
+        "username": "xxx",
+        "password": "xxx"
+    }
+    注意: 密码更改后需要重启服务才能生效
+    """
+    try:
+        data = request.get_json()
+        username = data.get('username', '')
+        password = data.get('password', '')
+
+        # 保存到文件
+        config_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'config.yaml'
+        )
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        # 更新环境变量（供后续进程使用）
+        import os
+        if username:
+            os.environ['JQCLOUD_USERNAME'] = username
+        if password:
+            os.environ['JQCLOUD_PASSWORD'] = password
+
+        config['credentials'] = {
+            'username': username,
+            'password': password
+        }
+
+        with open(config_path, 'w', encoding='utf-8') as f:
+            yaml.dump(config, f, allow_unicode=True)
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'username': username,
+                'password': '****' if password else '',
+                'message': '凭证已保存，重启服务后生效'
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 if __name__ == '__main__':
     init_app()
     app.run(host='0.0.0.0', port=5000, debug=False)

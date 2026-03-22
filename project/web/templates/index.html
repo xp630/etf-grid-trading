@@ -209,14 +209,136 @@
         .export-btn:hover {
             background: #444;
         }
+        .settings-btn {
+            background: #333;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            float: right;
+        }
+        .settings-btn:hover {
+            background: #444;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+        }
+        .modal-content {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 500px;
+            margin: 100px auto;
+        }
+        .modal h2 {
+            margin-bottom: 20px;
+            color: #00d4ff;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #888;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #1a1a2e;
+            color: #fff;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #00d4ff;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+        .modal-buttons button {
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-cancel {
+            background: #333;
+            color: #fff;
+        }
+        .btn-save {
+            background: #00d4ff;
+            color: #1a1a2e;
+        }
+        .notification-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #1a1a2e;
+            border-radius: 6px;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .status-dot.enabled { background: #00ff88; }
+        .status-dot.disabled { background: #ff4444; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📊 ETF网格交易监控</h1>
+        <h1>📊 ETF网格交易监控 <button class="settings-btn" onclick="openSettings()">⚙️ 设置</button></h1>
 
         <div class="data-notice" id="data-notice" style="display:none;">
             数据来源: <span id="data-source"></span> | 数据日期: <span id="data-date"></span> | 模拟交易模式
+        </div>
+
+        <!-- 设置弹窗 -->
+        <div class="modal" id="settings-modal">
+            <div class="modal-content">
+                <h2>⚙️ 系统设置</h2>
+
+                <h3 style="color:#888;margin:15px 0 10px;font-size:14px;">通知设置</h3>
+                <div class="form-group">
+                    <label>Server酱 SCKEY</label>
+                    <input type="text" id="setting-serverkey" placeholder="输入Server酱SCKEY">
+                </div>
+                <div class="notification-status">
+                    <div class="status-dot disabled" id="notify-status-dot"></div>
+                    <span id="notify-status-text">未配置</span>
+                </div>
+
+                <h3 style="color:#888;margin:15px 0 10px;font-size:14px;">聚宽账号</h3>
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="setting-jq-username" placeholder="聚宽用户名">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="setting-jq-password" placeholder="聚宽密码">
+                </div>
+
+                <div class="modal-buttons">
+                    <button class="btn-cancel" onclick="closeSettings()">取消</button>
+                    <button class="btn-save" onclick="saveSettings()">保存</button>
+                </div>
+            </div>
         </div>
 
         <!-- 网格可视化 -->
@@ -518,6 +640,73 @@
         function exportTrades() {
             window.location.href = '/api/trades/export';
         }
+
+        function openSettings() {
+            // 加载当前配置
+            fetch('/api/config')
+                .then(r => r.json())
+                .then(json => {
+                    if (json.success) {
+                        const notif = json.data.notification || {};
+                        document.getElementById('setting-serverkey').value = notif['server酱_key'] || '';
+
+                        // 检查通知状态
+                        const statusDot = document.getElementById('notify-status-dot');
+                        const statusText = document.getElementById('notify-status-text');
+                        if (notif['server酱_key']) {
+                            statusDot.className = 'status-dot enabled';
+                            statusText.textContent = '已配置';
+                        } else {
+                            statusDot.className = 'status-dot disabled';
+                            statusText.textContent = '未配置';
+                        }
+                    }
+                });
+
+            document.getElementById('settings-modal').style.display = 'block';
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').style.display = 'none';
+        }
+
+        async function saveSettings() {
+            const serverkey = document.getElementById('setting-serverkey').value.trim();
+            const jqUsername = document.getElementById('setting-jq-username').value.trim();
+            const jqPassword = document.getElementById('setting-jq-password').value;
+
+            try {
+                // 保存通知配置
+                await fetch('/api/config/notification', {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({'server酱_key': serverkey})
+                });
+
+                // 保存聚宽凭证
+                if (jqUsername || jqPassword) {
+                    await fetch('/api/config/credentials', {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            'username': jqUsername,
+                            'password': jqPassword
+                        })
+                    });
+                }
+
+                alert('设置已保存');
+                closeSettings();
+                location.reload();
+            } catch (err) {
+                alert('保存失败: ' + err);
+            }
+        }
+
+        // 点击弹窗背景关闭
+        document.getElementById('settings-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeSettings();
+        });
     </script>
 </body>
 </html>
