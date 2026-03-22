@@ -385,6 +385,7 @@
         }
         .tab-content {
             display: none;
+            width: 100%;
         }
         .tab-content.active {
             display: block;
@@ -522,50 +523,15 @@
         <div id="tab-settings" class="tab-content">
             <div class="card">
                 <h2>⚙️ 系统设置</h2>
-
-                <h3 style="color:#888;margin:15px 0 10px;font-size:14px;">通知设置</h3>
-                <div class="form-group">
-                    <label>Server酱 SCKEY</label>
-                    <input type="text" id="setting-serverkey" placeholder="输入Server酱SCKEY">
-                </div>
-                <div class="notification-status">
-                    <div class="status-dot disabled" id="notify-status-dot"></div>
-                    <span id="notify-status-text">未配置</span>
-                </div>
-
-                <h3 style="color:#888;margin:15px 0 10px;font-size:14px;">聚宽账号</h3>
-                <div class="form-group">
-                    <label>用户名</label>
-                    <input type="text" id="setting-jq-username" placeholder="聚宽用户名">
-                    <div class="notification-status">
-                        <div class="status-dot disabled" id="jq-status-dot"></div>
-                        <span id="jq-status-text">未配置</span>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>密码</label>
-                    <div class="password-toggle">
-                        <input type="password" id="setting-jq-password" placeholder="聚宽密码">
-                        <button type="button" class="toggle-btn" onclick="togglePassword()">👁️</button>
-                    </div>
-                </div>
-
-                <div class="modal-buttons">
-                    <button class="btn-save" onclick="saveSettings()">保存设置</button>
-                </div>
+                <p>设置内容...</p>
             </div>
         </div>
 
         <!-- 日志Tab -->
         <div id="tab-logs" class="tab-content">
             <div class="card">
-                <div class="log-header">
-                    <h3>📋 系统日志</h3>
-                    <button class="log-refresh" onclick="refreshLogs()">🔄 刷新</button>
-                </div>
-                <div class="log-viewer" id="log-viewer">
-                    <div style="color:#888;text-align:center;">加载中...</div>
-                </div>
+                <h2>📋 系统日志</h2>
+                <p>日志内容...</p>
             </div>
         </div>
     </div>
@@ -770,15 +736,6 @@
             // 显示目标tab
             document.getElementById('tab-' + tabName).classList.add('active');
             document.querySelector('.tab-btn[onclick="showTab(\'' + tabName + '\')"]').classList.add('active');
-
-            // 如果切换到设置，加载配置
-            if (tabName === 'settings') {
-                loadSettings();
-            }
-            // 如果切换到日志，刷新日志
-            if (tabName === 'logs') {
-                refreshLogs();
-            }
         }
 
         function loadSettings() {
@@ -787,32 +744,38 @@
                 .then(json => {
                     if (json.success) {
                         const notif = json.data.notification || {};
-                        document.getElementById('setting-serverkey').value = notif['server酱_key'] || '';
+                        const serverkeyInput = document.getElementById('setting-serverkey');
+                        if (serverkeyInput) serverkeyInput.value = notif['server酱_key'] || '';
 
                         // 检查通知状态
                         const statusDot = document.getElementById('notify-status-dot');
                         const statusText = document.getElementById('notify-status-text');
-                        if (notif['server酱_key']) {
-                            statusDot.className = 'status-dot enabled';
-                            statusText.textContent = '已配置';
-                        } else {
-                            statusDot.className = 'status-dot disabled';
-                            statusText.textContent = '未配置';
+                        if (statusDot && statusText) {
+                            if (notif['server酱_key']) {
+                                statusDot.className = 'status-dot enabled';
+                                statusText.textContent = '已配置';
+                            } else {
+                                statusDot.className = 'status-dot disabled';
+                                statusText.textContent = '未配置';
+                            }
                         }
 
                         // 显示聚宽账号状态
                         const creds = json.data.credentials || {};
                         const jqStatusDot = document.getElementById('jq-status-dot');
                         const jqStatusText = document.getElementById('jq-status-text');
-                        if (creds.username) {
-                            jqStatusDot.className = 'status-dot enabled';
-                            jqStatusText.textContent = '已配置: ' + creds.username;
-                        } else {
-                            jqStatusDot.className = 'status-dot disabled';
-                            jqStatusText.textContent = '未配置';
+                        if (jqStatusDot && jqStatusText) {
+                            if (creds.username) {
+                                jqStatusDot.className = 'status-dot enabled';
+                                jqStatusText.textContent = '已配置: ' + creds.username;
+                            } else {
+                                jqStatusDot.className = 'status-dot disabled';
+                                jqStatusText.textContent = '未配置';
+                            }
                         }
                     }
-                });
+                })
+                .catch(err => console.error('loadSettings error:', err));
         }
 
         function togglePassword() {
@@ -862,6 +825,7 @@
                 const resp = await fetch('/api/logs?lines=50');
                 const json = await resp.json();
                 const container = document.getElementById('log-viewer');
+                if (!container) return;
 
                 if (!json.success || !json.data.lines.length) {
                     container.innerHTML = '<div style="color:#888;text-align:center;">暂无日志</div>';
@@ -887,8 +851,10 @@
                 // 滚动到最新
                 container.scrollTop = container.scrollHeight;
             } catch (err) {
-                document.getElementById('log-viewer').innerHTML =
-                    '<div style="color:#ff4444;">加载失败: ' + err + '</div>';
+                const container = document.getElementById('log-viewer');
+                if (container) {
+                    container.innerHTML = '<div style="color:#ff4444;">加载失败: ' + err + '</div>';
+                }
             }
         }
 
