@@ -147,6 +147,9 @@ def api_config():
     # 隐藏敏感信息
     if 'notification' in config:
         config['notification']['server酱_key'] = '****' if config['notification'].get('server酱_key') else ''
+    # 添加凭证信息（不含密码）
+    if 'credentials' not in config:
+        config['credentials'] = {}
     return jsonify({
         'success': True,
         'data': config
@@ -397,6 +400,44 @@ def api_update_notification_config():
         }), 500
 
 
+@app.route('/api/logs')
+def api_logs():
+    """
+    获取日志内容
+
+    Query参数:
+        lines: 返回行数，默认100
+    """
+    try:
+        lines = int(request.args.get('lines', 100))
+        log_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'logs'
+        )
+        today = datetime.now().strftime("%Y%m%d")
+        log_file = os.path.join(log_dir, f'trading_{today}.log')
+
+        logs = []
+        if os.path.exists(log_file):
+            with open(log_file, 'r', encoding='utf-8') as f:
+                all_lines = f.readlines()
+                logs = [l.strip() for l in all_lines[-lines:] if l.strip()]
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'log_file': log_file,
+                'lines': logs,
+                'count': len(logs)
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/config/credentials', methods=['PUT'])
 def api_update_credentials():
     """
@@ -433,6 +474,9 @@ def api_update_credentials():
             'username': username,
             'password': password
         }
+
+        # 更新内存中的配置
+        _state['config']['credentials'] = config['credentials']
 
         with open(config_path, 'w', encoding='utf-8') as f:
             yaml.dump(config, f, allow_unicode=True)
