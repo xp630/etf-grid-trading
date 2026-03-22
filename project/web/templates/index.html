@@ -263,6 +263,22 @@
             outline: none;
             border-color: #00d4ff;
         }
+        .password-toggle {
+            position: relative;
+        }
+        .password-toggle input {
+            padding-right: 40px;
+        }
+        .password-toggle .toggle-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+        }
         .modal-buttons {
             display: flex;
             gap: 10px;
@@ -331,7 +347,10 @@
                 </div>
                 <div class="form-group">
                     <label>密码</label>
-                    <input type="password" id="setting-jq-password" placeholder="聚宽密码">
+                    <div class="password-toggle">
+                        <input type="password" id="setting-jq-password" placeholder="聚宽密码">
+                        <button type="button" class="toggle-btn" onclick="togglePassword()">👁️</button>
+                    </div>
                 </div>
 
                 <div class="modal-buttons">
@@ -668,6 +687,15 @@
 
         function closeSettings() {
             document.getElementById('settings-modal').style.display = 'none';
+        }
+
+        function togglePassword() {
+            const pwd = document.getElementById('setting-jq-password');
+            if (pwd.type === 'password') {
+                pwd.type = 'text';
+            } else {
+                pwd.type = 'password';
+            }
         }
 
         async function saveSettings() {
