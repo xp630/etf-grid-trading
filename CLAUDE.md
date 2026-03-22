@@ -15,8 +15,8 @@ pip install -r project/requirements.txt
 # 运行交易系统（需要设置环境变量）
 JQCLOUD_USERNAME=xxx JQCLOUD_PASSWORD=xxx python project/main.py
 
-# 运行Web监控面板
-python project/web/app.py
+# 运行Web监控面板(Streamlit)
+streamlit run project/web/streamlit_app.py --server.port 8501
 
 # 运行所有测试
 pytest project/ -v
@@ -67,9 +67,10 @@ DataEngine → RiskEngine → ExecutionEngine → GridStrategy
 ## 开发注意事项
 
 1. **聚宽认证**：`DataEngine.__init__()` 自动从环境变量读取并认证
-2. **Mock模式**：聚宽不可用时(ImportError)自动使用模拟价格3.70~3.90
-3. **14:50后**：非交易时间每60秒检查一次，开盘后每10秒执行
-4. **订单处理**：`ExecutionEngine._submit_order()` 调用聚宽API，失败返回mock订单ID
+2. **多数据源**：指数数据支持聚宽/AkShare/Baostock，可在设置页面切换
+3. **Mock模式**：所有数据源不可用时使用固定种子的模拟数据
+4. **14:50后**：非交易时间每60秒检查一次，开盘后每10秒执行
+5. **订单处理**：`ExecutionEngine._submit_order()` 调用聚宽API，失败返回mock订单ID
 
 ## 关键实现模式
 
@@ -79,10 +80,30 @@ DataEngine → RiskEngine → ExecutionEngine → GridStrategy
 - **持仓追踪**：`PositionTracker` 持有SQLite连接，positions表和trades表
 - **回测**：`BacktestRunner.run(price_data, dates)` 返回总收益率/最大回撤/胜率
 
+## 市场分析与AI解读
+
+**市场分析页面**（📊 市场分析）支持：
+- 预设指数：上证指数、深证成指、创业板指、科创50、沪深300、上证50、中证500
+- 手动输入：支持任意A股股票代码
+- 走势分析：区间涨跌、近5日涨跌、年化波动率、均线多空判断
+- 网格建议：自动判断是否适合做网格
+
+**AI解读功能**：
+- 点击"🤖 AI解读"按钮，输入提示词后发送给AI
+- AI根据数据判断是否适合做网格，给出策略建议
+- 提示词只给数据，不给结论，让AI自主判断
+
+**相关文件**：
+- `project/utils/llm_service.py` - LLM服务，支持MiniMax/OpenAI/DeepSeek
+- `project/engines/metrics.py` - `get_ai_market_analysis()` 计算AI分析
+- `project/web/api_server.py` - `/api/stock/trend` 获取个股数据（Baostock）
+- AI配置：`config.yaml` 中的 `ai_model` 节点（api_key, provider, model）
+- 数据源配置：`config.yaml` 中的 `data_source.index` 节点
+
 ## 入口文件
 
 - `project/main.py` - TradingSystem主类，run()方法
-- `project/web/app.py` - Flask Web服务，路由：/api/status, /api/risk/status
+- `project/web/streamlit_app.py` - Streamlit Web监控面板 (端口8501)
 - `project/config.yaml` - 所有配置集中在此
 
 ## 参考
