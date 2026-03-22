@@ -38,6 +38,124 @@ class DataEngine:
         self.retry_interval = retry_interval
         self._price_cache: Optional[float] = None
         self._cache_timestamp: float = 0
+        self._data_date: str = None  # 数据日期（用于标注数据来源）
+
+        # 聚宽认证（认证失败时自动切换Mock模式）
+        self._use_mock = False
+        if JQ_AVAILABLE:
+            import os
+            username = os.environ.get('JQCLOUD_USERNAME')
+            password = os.environ.get('JQCLOUD_PASSWORD')
+            if username and password:
+                try:
+                    jq.auth(username, password)
+                except Exception as e:
+                    print(f"[DataEngine] 聚宽认证失败 ({e})，切换到Mock模式")
+                    self._use_mock = True
+
+        # 聚宽证券代码格式：ETF需要添加 .XSHG 后缀
+        symbol_str = str(symbol)
+        if symbol_str.startswith('51') and '.' not in symbol_str:
+            self.full_symbol = f"{symbol_str}.XSHG"
+        else:
+            self.full_symbol = symbol_str
+
+        # 初始化时获取可用日期范围
+        self._init_date_range()
+
+    def _init_date_range(self):
+        """
+        初始化日期范围 - 动态计算聚宽账号可访问的日期范围
+
+        聚宽账号限制：距今15个月前 至 距今最近3个月
+        通过实际查询来确定账号的有效日期范围
+        """
+        from datetime import datetime, timedelta
+
+        today = datetime.now()
+
+        # 计算3个月前的日期（使用月份减法）
+        three_months_ago = self._subtract_months(today, 3)
+        # 如果是周末，退回到上周五
+        if three_months_ago.weekday() == 5:  # 周六
+            three_months_ago -= timedelta(days=1)
+        elif three_months_ago.weekday() == 6:  # 周日
+            three_months_ago -= timedelta(days=2)
+
+        theoretical_max = three_months_ago.strftime('%Y-%m-%d')
+
+        # 计算15个月前的日期
+        fifteen_months_ago = self._subtract_months(today, 15)
+        theoretical_min = fifteen_months_ago.strftime('%Y-%m-%d')
+
+        print(f"[DataEngine] 理论数据范围: {theoretical_min} ~ {theoretical_max}")
+
+        # 通过实际查询验证账号的真实有效范围
+        if not self._use_mock:
+            try:
+                all_days = jq.get_all_trade_days()
+                # 找到理论范围内最后一个有效交易日
+                actual_max = None
+                for d in reversed(all_days):
+                    if d.strftime('%Y-%m-%d') <= theoretical_max:
+                        actual_max = d.strftime('%Y-%m-%d')
+                        break
+
+                # 验证这个日期是否真的可以访问（可能会超出账号权限）
+                if actual_max:
+                    try:
+                        jq.get_price(self.full_symbol, end_date=actual_max, count=1, frequency='daily')
+                    except Exception:
+                        # 如果失败，往前找
+                        for d in reversed(all_days):
+                            if d.strftime('%Y-%m-%d') < actual_max:
+                                try:
+                                    jq.get_price(self.full_symbol, end_date=d.strftime('%Y-%m-%d'), count=1, frequency='daily')
+                                    actual_max = d.strftime('%Y-%m-%d')
+                                    break
+                                except:
+                                    continue
+
+                self._max_date = actual_max or theoretical_max
+                self._min_date = theoretical_min
+            except Exception as e:
+                print(f"[DataEngine] 无法获取交易日期列表，使用理论范围: {e}")
+                self._max_date = theoretical_max
+                self._min_date = theoretical_min
+        else:
+            self._max_date = theoretical_max
+            self._min_date = theoretical_min
+
+        print(f"[DataEngine] 数据可用范围: {self._min_date} ~ {self._max_date}")
+
+    def _subtract_months(self, date, months):
+        """
+        计算日期减去指定月数后的日期
+
+        Args:
+            date: datetime对象
+            months: 要减去的月数
+
+        Returns:
+            减去指定月数后的日期
+        """
+        from datetime import datetime
+        # 计算目标月份
+        year = date.year
+        month = date.month - months
+        day = date.day
+
+        while month <= 0:
+            month += 12
+            year -= 1
+
+        # 处理目标月份天数少于原日期天数的情况（如3月31日 -> 2月没有31日）
+        import calendar
+        max_day = calendar.monthrange(year, month)[1]
+        if day > max_day:
+            day = max_day
+
+        return datetime(year, month, day)
 
     def get_current_price(self) -> float:
         """
@@ -53,8 +171,11 @@ class DataEngine:
 
         for attempt in range(self.retry_times):
             try:
-                if JQ_AVAILABLE:
-                    price = jq.get_price(self.symbol, frequency='current')
+                if not self._use_mock:
+                    # 使用get_price获取最后可用价格（不需要实时权限）
+                    df = jq.get_price(self.full_symbol, end_date=self._max_date, count=1, frequency='daily')
+                    price = df['close'].iloc[-1]
+                    self._data_date = self._max_date
                 else:
                     # Mock数据（测试用）
                     price = self._mock_price()
@@ -77,15 +198,30 @@ class DataEngine:
 
     def get_baseline_price(self) -> float:
         """
-        获取基准价（前一日收盘价）
+        获取基准价（最后可用收盘价）
 
         Returns:
             基准价
         """
-        if JQ_AVAILABLE:
-            return jq.get_yesterday_close(self.symbol)
+        if not self._use_mock:
+            # 获取最近一个交易日的数据（使用账号权限范围内的日期）
+            all_days = jq.get_all_trade_days()
+            # 找到在可访问范围内的最后交易日
+            latest_valid = None
+            for d in reversed(all_days):
+                if d.strftime('%Y-%m-%d') <= self._max_date:
+                    latest_valid = d.strftime('%Y-%m-%d')
+                    break
+            if not latest_valid:
+                # 如果没找到，使用可访问范围的最大日期
+                latest_valid = self._max_date
+
+            df = jq.get_price(self.full_symbol, end_date=latest_valid, count=1, frequency='daily')
+            self._data_date = latest_valid
+            return df['close'].iloc[0]
         else:
             # Mock数据（测试用）
+            self._data_date = 'mock'
             return 3.80
 
     def get_price_with_cache(self, cache_seconds: float = 10) -> float:
@@ -121,19 +257,8 @@ class DataEngine:
         Returns:
             是否开盘
         """
-        from datetime import datetime, time as dtime
-
-        now = datetime.now()
-        current_time = now.time()
-
-        # 简单判断：工作日9:30-15:00为开盘时间
-        market_open = dtime(9, 30)
-        market_close = dtime(15, 0)
-
-        return (
-            now.weekday() < 5 and  # 周一到周五
-            market_open <= current_time <= market_close
-        )
+        from utils.market_calendar import get_market_calendar
+        return get_market_calendar().is_market_open()
 
     def get_market_status(self) -> dict:
         """
@@ -146,5 +271,22 @@ class DataEngine:
             'symbol': self.symbol,
             'is_open': self.is_market_open(),
             'current_price': self._price_cache,
-            'cache_age': time.time() - self._cache_timestamp if self._cache_timestamp else None
+            'cache_age': time.time() - self._cache_timestamp if self._cache_timestamp else None,
+            'data_date': self._data_date,
+            'data_source': 'JoinQuant历史数据' if not self._use_mock else 'Mock模拟数据',
+            'data_range': f'{self._min_date} ~ {self._max_date}' if not self._use_mock else None
+        }
+
+    def get_data_info(self) -> dict:
+        """
+        获取数据来源信息（用于API返回）
+
+        Returns:
+            数据来源信息字典
+        """
+        return {
+            'data_date': self._data_date,
+            'data_source': 'JoinQuant历史数据' if not self._use_mock else 'Mock模拟数据',
+            'data_range': f'{self._min_date} ~ {self._max_date}' if not self._use_mock else None,
+            'is_historical': not self._use_mock
         }

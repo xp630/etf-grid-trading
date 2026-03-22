@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 日志和数据（运行时挂载）
+logs/
+data/
+*.db
+
+# 文档
+*.md
+docs/
+
+# OS
+.DS_Store
+Thumbs.db

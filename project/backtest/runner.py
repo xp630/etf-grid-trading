@@ -157,6 +157,183 @@ class BacktestRunner:
             'trades': self.trades
         }
 
+    def generate_chart_html(self, title: str = "回测结果") -> str:
+        """
+        生成回测结果图表HTML
+
+        Args:
+            title: 图表标题
+
+        Returns:
+            HTML字符串，包含Chart.js图表
+        """
+        if not self.daily_pnl:
+            return "<p>无回测数据</p>"
+
+        # 提取数据
+        dates = [d['date'] for d in self.daily_pnl]
+        equity = [d['total'] for d in self.daily_pnl]
+
+        # 计算回撤序列
+        peak = self.initial_capital
+        drawdown = []
+        for day in self.daily_pnl:
+            if day['total'] > peak:
+                peak = day['total']
+            dd = (peak - day['total']) / peak if peak > 0 else 0
+            drawdown.append(dd * 100)
+
+        # 价格数据
+        prices = [d['price'] for d in self.daily_pnl]
+
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{title}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; background: #1a1a2e; color: #eee; }}
+        .container {{ max-width: 1200px; margin: 0 auto; }}
+        h1 {{ color: #00d4ff; text-align: center; }}
+        .stats {{ display: flex; justify-content: center; gap: 30px; margin: 20px 0; flex-wrap: wrap; }}
+        .stat {{ background: #16213e; padding: 15px 25px; border-radius: 10px; text-align: center; }}
+        .stat-value {{ font-size: 24px; font-weight: bold; color: #00d4ff; }}
+        .stat-label {{ color: #888; font-size: 14px; margin-top: 5px; }}
+        .positive {{ color: #00ff88; }}
+        .negative {{ color: #ff4444; }}
+        .chart-container {{ background: #16213e; border-radius: 12px; padding: 20px; margin: 20px 0; }}
+        .chart-title {{ font-size: 16px; color: #888; margin-bottom: 15px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>{title}</h1>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="stat-value {'positive' if equity[-1] >= self.initial_capital else 'negative'}">{equity[-1]:.2f}</div>
+                <div class="stat-label">最终价值</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value {'positive' if equity[-1] >= self.initial_capital else 'negative'}">{((equity[-1]-self.initial_capital)/self.initial_capital*100):.2f}%</div>
+                <div class="stat-label">总收益率</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value negative">{max(drawdown):.2f}%</div>
+                <div class="stat-label">最大回撤</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value">{(sum(1 for t in self.trades if t['action']=='sell') or 0)}</div>
+                <div class="stat-label">总交易次数</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">权益曲线</div>
+            <canvas id="equityChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">回撤曲线</div>
+            <canvas id="drawdownChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <div class="chart-title">价格走势</div>
+            <canvas id="priceChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const labels = {dates};
+        const equityData = {equity};
+        const drawdownData = {drawdown};
+        const priceData = {prices};
+
+        // 权益曲线
+        new Chart(document.getElementById('equityChart'), {{
+            type: 'line',
+            data: {{
+                labels: labels,
+                datasets: [{{
+                    label: '账户权益',
+                    data: equityData,
+                    borderColor: '#00d4ff',
+                    backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                    fill: true,
+                    tension: 0.1
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                plugins: {{ legend: {{ display: false }} }},
+                scales: {{
+                    x: {{ display: false }},
+                    y: {{ ticks: {{ color: '#888' }} }}
+                }}
+            }}
+        }});
+
+        // 回撤曲线
+        new Chart(document.getElementById('drawdownChart'), {{
+            type: 'line',
+            data: {{
+                labels: labels,
+                datasets: [{{
+                    label: '回撤',
+                    data: drawdownData,
+                    borderColor: '#ff4444',
+                    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+                    fill: true,
+                    tension: 0.1
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                plugins: {{ legend: {{ display: false }} }},
+                scales: {{
+                    x: {{ display: false }},
+                    y: {{ ticks: {{ color: '#888' }}, max: 0 }}
+                }}
+            }}
+        }});
+
+        // 价格走势
+        new Chart(document.getElementById('priceChart'), {{
+            type: 'line',
+            data: {{
+                labels: labels,
+                datasets: [{{
+                    label: '价格',
+                    data: priceData,
+                    borderColor: '#00ff88',
+                    backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                    fill: false,
+                    tension: 0.1
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                plugins: {{ legend: {{ display: false }} }},
+                scales: {{
+                    x: {{ display: false }},
+                    y: {{ ticks: {{ color: '#888' }} }}
+                }}
+            }}
+        }});
+    </script>
+</body>
+</html>"""
+        return html
+
+    def save_chart(self, filepath: str, title: str = "回测结果"):
+        """保存图表到HTML文件"""
+        html = self.generate_chart_html(title)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(html)
+
 
 def run_backtest_demo():
     """运行示例回测"""

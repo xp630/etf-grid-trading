@@ -1,4 +1,4 @@
-jqdatasdk==1.8.47
+jqdatasdk==1.9.8
 flask>=2.0.0
 pyyaml>=5.4.0
 requests>=2.25.0

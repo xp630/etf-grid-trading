@@ -1,0 +1,37 @@
+# ETF网格交易系统 Docker Compose配置
+version: '3.8'
+
+services:
+  # 交易系统（后台运行）
+  trading:
+    build: .
+    container_name: etf-trading
+    environment:
+      - JQCLOUD_USERNAME=${JQCLOUD_USERNAME}
+      - JQCLOUD_PASSWORD=${JQCLOUD_PASSWORD}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    restart: unless-stopped
+    networks:
+      - trading-net
+
+  # Web监控面板
+  web:
+    build: .
+    container_name: etf-web
+    ports:
+      - "5000:5000"
+    environment:
+      - JQCLOUD_USERNAME=${JQCLOUD_USERNAME}
+      - JQCLOUD_PASSWORD=${JQCLOUD_PASSWORD}
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    restart: unless-stopped
+    networks:
+      - trading-net
+
+networks:
+  trading-net:
+    driver: bridge

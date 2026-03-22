@@ -7,6 +7,7 @@ import time
 import signal
 import yaml
 import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime
 
 # 添加项目根目录到路径
@@ -16,15 +17,56 @@ from engines.data import DataEngine
 from engines.execution import ExecutionEngine
 from engines.risk import RiskEngine
 from utils.position_tracker import PositionTracker
+from utils.market_calendar import get_market_calendar
 from strategies.grid import GridStrategy
 from notification.notifier import Notifier
 
-# 日志配置
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+
+def setup_logging(config: dict = None):
+    """配置日志系统，支持文件输出"""
+    if config is None:
+        config = {}
+
+    log_config = config.get('logging', {})
+    log_dir = log_config.get('dir', 'logs')
+    log_level = log_config.get('level', 'INFO')
+    max_bytes = log_config.get('max_bytes', 10 * 1024 * 1024)
+    backup_count = log_config.get('backup_count', 30)
+
+    os.makedirs(log_dir, exist_ok=True)
+
+    # 创建logger
+    logger = logging.getLogger(__name__)
+    logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+
+    # 清除已有的handlers
+    logger.handlers.clear()
+
+    # 日志格式
+    formatter = logging.Formatter(
+        '%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+    # 控制台输出
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+    # 文件输出（按日期轮转）
+    log_file = os.path.join(log_dir, f'trading_{datetime.now().strftime("%Y%m%d")}.log')
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding='utf-8'
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    return logger
 
 
 class TradingSystem:
@@ -34,6 +76,10 @@ class TradingSystem:
         # 加载配置
         with open(config_path, 'r', encoding='utf-8') as f:
             self.config = yaml.safe_load(f)
+
+        # 设置日志
+        global logger
+        logger = setup_logging(self.config)
 
         # 初始化数据库路径
         db_path = self.config['database']['path']
@@ -66,20 +112,7 @@ class TradingSystem:
 
     def is_trading_time(self) -> bool:
         """检查是否在交易时间内"""
-        now = datetime.now()
-        current_time = now.time()
-
-        open_time = datetime.strptime(
-            self.config['market']['trading_hours']['open'], '%H:%M'
-        ).time()
-        close_time = datetime.strptime(
-            self.config['market']['trading_hours']['close'], '%H:%M'
-        ).time()
-
-        return (
-            now.weekday() < 5 and  # 周一到周五
-            open_time <= current_time <= close_time
-        )
+        return get_market_calendar().is_market_open()
 
     def _is_market_close_time(self) -> bool:
         """检查是否接近收盘时间（14:55-15:00）"""
