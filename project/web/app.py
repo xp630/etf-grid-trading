@@ -156,6 +156,16 @@ def api_config():
     })
 
 
+@app.route('/api/config/settings')
+def api_config_settings():
+    """获取配置（不脱敏，用于设置页面）"""
+    config = _state['config'].copy()
+    return jsonify({
+        'success': True,
+        'data': config
+    })
+
+
 @app.route('/api/grid/status')
 def api_grid_status():
     """获取网格状态"""
@@ -464,7 +474,6 @@ def api_update_credentials():
             config = yaml.safe_load(f)
 
         # 更新环境变量（供后续进程使用）
-        import os
         if username:
             os.environ['JQCLOUD_USERNAME'] = username
         if password:

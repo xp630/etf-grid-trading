@@ -1,36 +1,32 @@
-grid:
-  levels: 10           # 网格格数
-  spacing: 0.05        # 网格间距（5%）
-  unit_size: 500       # 每格交易金额（元）
-
-risk:
-  initial_capital: 10000  # 初始本金（元）
-  max_position: 5000   # 最大持仓（元）
-  max_daily_loss: 100  # 日最大亏损（元）
-  total_stop_loss: 9000  # 总资产止损线（元）
-
 broker:
-  name: joinquant      # 聚宽
-  account_type: simulated  # simulated / live
-
-market:
-  etf_code: 510300     # 沪深300ETF
-  trading_hours:
-    open: "09:30"
-    close: "15:00"
-    cancel_before: "14:50"
-
-notification:
-  server酱_key: ""      # Server酱SCKEY，留空则禁用
-
-database:
-  path: "data/trading.db"
-
-logging:
-  level: "INFO"        # 日志级别: DEBUG, INFO, WARNING, ERROR
-  dir: "logs"          # 日志目录
-  max_bytes: 10485760  # 单个日志文件最大10MB
-  backup_count: 30      # 保留备份数
-
+  account_type: simulated
+  name: joinquant
+credentials:
+  password: Yhl@850125
+  username: '18608130915'
 data_source:
-  provider: "joinquant"  # joinquant / akshare / tushare
+  provider: joinquant
+database:
+  path: data/trading.db
+grid:
+  levels: 10
+  spacing: 0.05
+  unit_size: 500
+logging:
+  backup_count: 30
+  dir: logs
+  level: INFO
+  max_bytes: 10485760
+market:
+  etf_code: 510300
+  trading_hours:
+    cancel_before: '14:50'
+    close: '15:00'
+    open: 09:30
+notification:
+  server酱_key: SCT327096T7eYRPgj2vMlixz8tO7clcDJ2
+risk:
+  initial_capital: 10000
+  max_daily_loss: 100
+  max_position: 5000
+  total_stop_loss: 9000

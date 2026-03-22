@@ -102,19 +102,24 @@ class DataEngine:
                         break
 
                 # 验证这个日期是否真的可以访问（可能会超出账号权限）
+                # 如果失败，持续往前找直到找到有效日期
                 if actual_max:
-                    try:
-                        jq.get_price(self.full_symbol, end_date=actual_max, count=1, frequency='daily')
-                    except Exception:
-                        # 如果失败，往前找
-                        for d in reversed(all_days):
-                            if d.strftime('%Y-%m-%d') < actual_max:
-                                try:
-                                    jq.get_price(self.full_symbol, end_date=d.strftime('%Y-%m-%d'), count=1, frequency='daily')
-                                    actual_max = d.strftime('%Y-%m-%d')
-                                    break
-                                except:
-                                    continue
+                    verified_max = None
+                    for d in reversed(all_days):
+                        if d.strftime('%Y-%m-%d') > actual_max:
+                            continue
+                        try:
+                            jq.get_price(self.full_symbol, end_date=d.strftime('%Y-%m-%d'), count=1, frequency='daily')
+                            verified_max = d.strftime('%Y-%m-%d')
+                            break
+                        except Exception:
+                            continue
+
+                    if verified_max:
+                        actual_max = verified_max
+                    else:
+                        # 找不到任何有效日期，使用理论最大值
+                        actual_max = theoretical_max
 
                 self._max_date = actual_max or theoretical_max
                 self._min_date = theoretical_min
