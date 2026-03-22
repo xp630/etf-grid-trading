@@ -10,18 +10,28 @@ from datetime import datetime
 
 
 def restart_trading_system():
-    """重启交易系统"""
+    """重启交易系统（仅限非交易时间）"""
     try:
-        # 杀掉现有main.py进程
+        # 检查是否在交易时间
+        status = get_api('http://127.0.0.1:5000/api/status')
+        if not status or not status.get('success'):
+            return False, "无法连接到交易系统"
+
+        # 先发送SIGTERM信号让进程优雅退出
         subprocess.run(['taskkill', '/F', '/IM', 'python.exe', '/FI', 'WINDOWTITLE eq *main.py*'],
-                      capture_output=True, stderr=subprocess.DEVNULL)
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         import time
-        time.sleep(2)
+        # 等待最多10秒让进程自然退出
+        for _ in range(10):
+            time.sleep(1)
+            result = subprocess.run(['tasklist'], stdout=subprocess.PIPE, text=True)
+            if 'main.py' not in result.stdout:
+                break
         # 启动新的交易系统
         subprocess.Popen(['python', 'main.py'], cwd=os.path.dirname(os.path.dirname(__file__)))
-        return True
-    except:
-        return False
+        return True, "交易系统已重启!"
+    except Exception as e:
+        return False, str(e)
 
 st.set_page_config(
     page_title="ETF网格交易监控",
@@ -108,6 +118,13 @@ st.markdown("""
 
     /* 数字高亮 */
     .highlight-value { color: #e8f0e0; font-size: 48px; font-weight: 700; }
+
+    /* 日志显示 */
+    .log-container { background: #0f1510; border-radius: 8px; padding: 15px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; }
+    .log-error { color: #ff6b6b; background: transparent; }
+    .log-warning { color: #ffa500; background: transparent; }
+    .log-info { color: #c8e6c8; background: transparent; }
+    .log-debug { color: #888888; background: transparent; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -298,13 +315,23 @@ elif page == "⚙️ 设置":
             type='password',
             placeholder="输入你的Server酱SCKEY"
         )
-        submitted = st.form_submit_button("保存")
+        col1, col2 = st.columns(2)
+        with col1:
+            submitted = st.form_submit_button("保存", use_container_width=True)
+        with col2:
+            test_clicked = st.form_submit_button("🧪 发送测试", use_container_width=True)
         if submitted:
             result = put_api('http://127.0.0.1:5000/api/config/notification', {'server酱_key': server酱_key})
             if result and result.get('success'):
                 st.success("保存成功!")
             else:
                 st.error("保存失败: 无法连接到交易系统")
+        if test_clicked:
+            result = post_api('http://127.0.0.1:5000/api/config/notification/test', {})
+            if result and result.get('success'):
+                st.success("发送成功，请检查微信！")
+            else:
+                st.error(f"发送失败: {result.get('error', '未知错误') if result else '无法连接'}")
 
     st.divider()
 
@@ -316,21 +343,36 @@ elif page == "⚙️ 设置":
             username = st.text_input("用户名", value=creds.get('username', ''))
         with col2:
             password = st.text_input("密码", value=creds.get('password', ''), type='password')
-        submitted = st.form_submit_button("保存")
+        col1, col2 = st.columns(2)
+        with col1:
+            submitted = st.form_submit_button("保存", use_container_width=True)
+        with col2:
+            test_clicked = st.form_submit_button("🧪 测试认证", use_container_width=True)
         if submitted:
             result = put_api('http://127.0.0.1:5000/api/config/credentials', {'username': username, 'password': password})
             if result and result.get('success'):
                 st.success("保存成功!")
             else:
                 st.error("保存失败: 无法连接到交易系统")
+        if test_clicked:
+            result = post_api('http://127.0.0.1:5000/api/config/credentials/test', {})
+            if result and result.get('success'):
+                st.success("认证成功！")
+            else:
+                st.error(f"认证失败: {result.get('error', '未知错误') if result else '无法连接'}")
+
+    st.divider()
+
+    st.subheader("🔄 系统操作")
+    st.warning("💡 仅限非交易时间或交易结束后使用重启")
 
     if st.button("🔄 重启交易系统", use_container_width=True):
         with st.spinner("正在重启..."):
-            success = restart_trading_system()
+            success, msg = restart_trading_system()
             if success:
-                st.success("交易系统已重启!")
+                st.success(msg)
             else:
-                st.error("重启失败，请手动重启")
+                st.error(f"重启失败: {msg}")
 
     st.divider()
 
@@ -372,13 +414,17 @@ elif page == "📋 日志":
         logs = logs_data['data']['lines']
         if logs:
             st.divider()
+            st.markdown('<div class="log-container">', unsafe_allow_html=True)
             for log in reversed(logs[-50:]):
-                if "ERROR" in log:
-                    st.markdown(f":red[{log}]")
-                elif "WARNING" in log:
-                    st.markdown(f":orange[{log}]")
+                if "ERROR" in log or "错误" in log:
+                    st.markdown(f'<div class="log-error">{log}</div>', unsafe_allow_html=True)
+                elif "WARNING" in log or "警告" in log:
+                    st.markdown(f'<div class="log-warning">{log}</div>', unsafe_allow_html=True)
+                elif "INFO" in log or "信息" in log:
+                    st.markdown(f'<div class="log-info">{log}</div>', unsafe_allow_html=True)
                 else:
-                    st.text(log)
+                    st.markdown(f'<div class="log-debug">{log}</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("暂无日志")
     else:

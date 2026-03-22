@@ -5,6 +5,7 @@ from flask import Flask, render_template, jsonify, request
 import yaml
 import os
 import sys
+import logging
 from datetime import datetime
 
 # 添加项目根目录到路径
@@ -408,6 +409,56 @@ def api_update_notification_config():
             'success': False,
             'error': str(e)
         }), 500
+
+
+@app.route('/api/config/notification/test', methods=['POST'])
+def api_test_notification():
+    """测试微信通知"""
+    try:
+        server酱_key = _state['config']['notification'].get('server酱_key', '')
+        if not server酱_key:
+            app.logger.warning("[微信通知测试] 失败: Server酱 Key未配置")
+            return jsonify({'success': False, 'error': 'Server酱 Key未配置'})
+
+        notifier = Notifier(server酱_key)
+        success = notifier.send(
+            title='🧪 测试消息',
+            content='这是一条测试消息，如果你看到此消息说明微信推送配置成功！\n\n时间: ' + datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
+
+        if success:
+            app.logger.info("[微信通知测试] 成功!")
+            return jsonify({'success': True, 'message': '发送成功，请检查微信'})
+        else:
+            app.logger.warning("[微信通知测试] 失败: 发送返回False")
+            return jsonify({'success': False, 'error': '发送失败，请检查Server酱 Key是否正确'})
+
+    except Exception as e:
+        app.logger.error(f"[微信通知测试] 异常: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/config/credentials/test', methods=['POST'])
+def api_test_credentials():
+    """测试聚宽账号"""
+    try:
+        import jqdatasdk as jq
+        creds = _state['config'].get('credentials', {})
+        username = creds.get('username', '')
+        password = creds.get('password', '')
+
+        if not username or not password:
+            app.logger.warning("[聚宽认证测试] 失败: 用户名或密码未配置")
+            return jsonify({'success': False, 'error': '用户名或密码未配置'})
+
+        # 尝试认证
+        jq.auth(username, password)
+        app.logger.info(f"[聚宽认证测试] 成功! 用户: {username[:2]}***{username[-2:]}")
+        return jsonify({'success': True, 'message': '认证成功！聚宽账号配置正确'})
+
+    except Exception as e:
+        app.logger.error(f"[聚宽认证测试] 失败: {e}")
+        return jsonify({'success': False, 'error': f'认证失败: {str(e)}'}), 500
 
 
 @app.route('/api/logs')
