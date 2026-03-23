@@ -88,9 +88,9 @@ class TradingSystem:
         # 初始化组件
         self.tracker = PositionTracker(db_path)
         self.risk = RiskEngine(self.tracker, self.config['risk'])
-        self.data = DataEngine(self.config['market']['etf_code'])
+        self.data = DataEngine(self.config)
         self.notifier = Notifier(self.config['notification'].get('server酱_key', ''))
-        self.execution = ExecutionEngine(self.tracker, self.risk, self.data)
+        self.execution = ExecutionEngine(self.tracker, self.risk, self.data, config=self.config)
 
         # 初始化策略
         self.strategy = GridStrategy(

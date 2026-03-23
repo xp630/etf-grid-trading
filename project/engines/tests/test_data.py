@@ -7,29 +7,27 @@ from unittest.mock import MagicMock, patch
 import sys
 sys.path.insert(0, '../../..')
 
-from engines.data import DataEngine, JQ_AVAILABLE
+from engines.data import DataEngine
 
 
-def test_init():
+@pytest.fixture
+def mock_config():
+    return {
+        'market': {'etf_code': '510300'},
+        'data_source': {'index': 'mock'},
+    }
+
+
+def test_init(mock_config):
     """测试初始化"""
-    engine = DataEngine('510300', retry_times=5, retry_interval=1.0)
+    engine = DataEngine(mock_config)
     assert engine.symbol == '510300'
-    assert engine.retry_times == 5
-    assert engine.retry_interval == 1.0
+    assert engine._source is not None
 
 
-def test_mock_price():
-    """测试Mock价格生成"""
-    engine = DataEngine('510300')
-    price = engine._mock_price()
-
-    # Mock价格应该在3.7-3.9范围内
-    assert 3.7 <= price <= 3.9
-
-
-def test_get_price_with_cache():
+def test_get_price_with_cache(mock_config):
     """测试带缓存的价格获取"""
-    engine = DataEngine('510300')
+    engine = DataEngine(mock_config)
 
     # 手动设置缓存
     engine._price_cache = 3.85
@@ -40,9 +38,9 @@ def test_get_price_with_cache():
     assert abs(price - 3.85) < 0.001
 
 
-def test_get_market_status():
+def test_get_market_status(mock_config):
     """测试获取市场状态"""
-    engine = DataEngine('510300')
+    engine = DataEngine(mock_config)
     status = engine.get_market_status()
 
     assert 'symbol' in status

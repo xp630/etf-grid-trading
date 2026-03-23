@@ -88,9 +88,9 @@ def create_api_server(config_path: str = None):
 
     tracker = PositionTracker(db_path)
     risk = RiskEngine(tracker, config['risk'])
-    data = DataEngine(config['market']['etf_code'])
+    data = DataEngine(config)
     notifier = Notifier(config['notification'].get('server酱_key', ''))
-    execution = ExecutionEngine(tracker, risk, data)
+    execution = ExecutionEngine(tracker, risk, data, config=config)
 
     # 启动配置汇总
     creds = config.get('credentials', {})
@@ -753,7 +753,7 @@ def create_api_server(config_path: str = None):
     def test_credentials():
         try:
             from engines.data import DataEngine
-            test_data = DataEngine(config['market']['etf_code'])
+            test_data = DataEngine(config)
             price = test_data.get_current_price()
             return jsonify({'success': True, 'data': {'price': price}})
         except Exception as e:
