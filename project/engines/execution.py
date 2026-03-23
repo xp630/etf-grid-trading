@@ -21,7 +21,8 @@ class ExecutionEngine:
     def __init__(self,
                  position_tracker: PositionTracker,
                  risk_engine: RiskEngine,
-                 data_engine: DataEngine = None):
+                 data_engine: DataEngine = None,
+                 config: Dict[str, Any] = None):
         """
         初始化执行引擎
 
@@ -29,15 +30,17 @@ class ExecutionEngine:
             position_tracker: 持仓追踪器
             risk_engine: 风控引擎
             data_engine: 数据引擎（可选，用于获取当前价）
+            config: 配置字典（可选，从中读取佣金率和滑点率）
         """
         self.tracker = position_tracker
         self.risk = risk_engine
         self.data = data_engine
         self._pending_orders: Dict[str, Dict] = {}
 
-        # 交易成本参数（佣金率 + 滑点率）
-        self.commission_rate: float = 0.00025  # 默认万2.5佣金
-        self.slippage_rate: float = 0.0001    # 默认万1滑点
+        # 交易成本参数（佣金率 + 滑点率），优先从配置读取
+        cost_config = (config or {}).get('risk_control', {}) if config else {}
+        self.commission_rate: float = cost_config.get('commission_rate', 0.00025)
+        self.slippage_rate: float = cost_config.get('slippage_rate', 0.0001)
 
     def place_order(self,
                     action: str,

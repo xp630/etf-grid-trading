@@ -85,7 +85,8 @@ class DataSourceFactory:
             try:
                 logging.info(f"[DataSourceFactory] auto 模式尝试: {source_name}")
                 ds = cls._create_single(source_name, config)
-                # 测试连通性
+                # 测试连通性（用 get_current_price，它返回最近收盘价，
+                # 无论今天是否交易日都能获取到历史数据）
                 ds.get_current_price()
                 logging.info(f"[DataSourceFactory] auto 模式成功: {source_name}")
                 return ds

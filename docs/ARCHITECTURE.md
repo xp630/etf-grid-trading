@@ -298,41 +298,9 @@ trades: id INTEGER PRIMARY KEY, symbol TEXT, action TEXT, price REAL,
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**注意**：`web/app.py`（Flask 监控面板）已废弃，功能迁移到 Streamlit。
-
 ---
 
-## 5. 数据源架构
-
-```
-                    DataSourceFactory
-                          │
-         ┌────────────────┼────────────────┐
-         ▼                ▼                ▼
-  ┌──────────┐    ┌──────────┐    ┌──────────┐
-  │ JoinQuant │    │  AkShare  │    │ Tushare  │
-  │ DataSource│    │ DataSource│    │ DataSource│
-  └────┬─────┘    └────┬─────┘    └────┬─────┘
-       │               │               │
-       └───────────────┼───────────────┘
-                       ▼
-              BaseDataSource（ABC）
-              get_current_price()
-              get_baseline_price()
-              is_market_open()
-              get_market_status()
-              get_historical_prices()
-```
-
-**选择策略**（`data_sources/factory.py`）：
-- `config.yaml` 指定 `index: akshare` → 使用 AkShare
-- `index: joinquant` → 使用聚宽
-- `index: tushare` → 使用 Tushare
-- 所有数据源失败 → 回退到 Mock 模式（固定模拟价格）
-
----
-
-## 6. 错误处理
+## 5. 错误处理
 
 | 场景 | 处理方式 |
 |------|---------|

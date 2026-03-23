@@ -27,7 +27,7 @@ class BacktestRunner:
         # 结果存储
         self.trades: List[Dict] = []
         self.daily_pnl: List[Dict] = []
-        self.initial_capital = 10000
+        self.initial_capital = self.risk_config.get('initial_capital', 10000)
 
     def run(self, price_data: List[float], dates: List[str] = None) -> Dict[str, Any]:
         """

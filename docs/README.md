@@ -41,11 +41,6 @@ project/
 │   ├── execution.py     # 执行引擎
 │   ├── risk.py          # 风控引擎
 │   └── metrics.py       # 指标计算 + AI市场分析
-├── data_sources/        # 多数据源抽象
-│   ├── base.py          # 抽象接口
-│   ├── factory.py       # 工厂类
-│   ├── akshare_source.py
-│   └── tushare_source.py
 ├── utils/
 │   ├── grid_calculator.py # 网格档位计算
 │   ├── position_tracker.py # SQLite 持仓追踪
