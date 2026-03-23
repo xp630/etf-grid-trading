@@ -35,6 +35,10 @@ class ExecutionEngine:
         self.data = data_engine
         self._pending_orders: Dict[str, Dict] = {}
 
+        # 交易成本参数（佣金率 + 滑点率）
+        self.commission_rate: float = 0.00025  # 默认万2.5佣金
+        self.slippage_rate: float = 0.0001    # 默认万1滑点
+
     def place_order(self,
                     action: str,
                     symbol: str,
