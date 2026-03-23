@@ -4,8 +4,8 @@
 #    ETF网格交易系统管理器 (macOS/Linux)
 # ========================================
 
-PROJECT_DIR="$(cd "$(dirname "$0")/project" && pwd)"
-PID_DIR="$(dirname "$0")/.pids"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)/project"
+PID_DIR="$(cd "$(dirname "$0")" && pwd)/.pids"
 mkdir -p "$PID_DIR"
 
 usage() {
@@ -46,7 +46,7 @@ status() {
         echo "  交易系统(main.py): [已停止]"
     fi
 
-    if pgrep -f "python.*web/app.py" > /dev/null 2>&1; then
+    if pgrep -f "python.*web/api_server.py" > /dev/null 2>&1; then
         echo "  Web面板(Flask):    [运行中]"
     else
         echo "  Web面板(Flask):    [已停止]"
@@ -78,31 +78,32 @@ start_main() {
     echo "[启动] 交易系统..."
     cd "$PROJECT_DIR"
     nohup python3 main.py > /dev/null 2>&1 &
-    echo "$$" > "$PID_DIR/main.pid"
-    echo "[成功] 交易系统已在后台启动"
+    echo $! > "$PID_DIR/main.pid"
+    echo "[成功] 交易系统已在后台启动 (PID: $!)"
 }
 
 start_web() {
     echo "[启动] Web面板(Flask)..."
     cd "$PROJECT_DIR"
-    nohup python3 web/app.py > /dev/null 2>&1 &
-    echo "$$" > "$PID_DIR/web.pid"
-    echo "[成功] Web面板已在后台启动"
-    echo "    访问地址: http://127.0.0.1:5000"
+    nohup python3 web/api_server.py > /dev/null 2>&1 &
+    echo $! > "$PID_DIR/web.pid"
+    echo "[成功] Web面板已在后台启动 (PID: $!)"
+    echo "    访问地址: http://127.0.0.1:5001"
 }
 
 start_streamlit() {
     echo "[启动] Streamlit面板..."
     cd "$PROJECT_DIR"
     nohup streamlit run web/streamlit_app.py --server.port 8501 --server.headless=true > /dev/null 2>&1 &
-    echo "$$" > "$PID_DIR/streamlit.pid"
-    echo "[成功] Streamlit面板已在后台启动"
+    echo $! > "$PID_DIR/streamlit.pid"
+    echo "[成功] Streamlit面板已在后台启动 (PID: $!)"
     echo "    访问地址: http://localhost:8501"
 }
 
 start_all() {
     start_main
     start_web
+    start_streamlit
 }
 
 stop_main() {
@@ -114,7 +115,7 @@ stop_main() {
 
 stop_web() {
     echo "[停止] Web面板..."
-    pkill -f "python.*web/app.py" 2>/dev/null
+    pkill -f "python.*web/api_server.py" 2>/dev/null
     rm -f "$PID_DIR/web.pid" 2>/dev/null
     echo "[成功] Web面板已停止"
 }

@@ -1,8 +1,11 @@
 """
 数据引擎 - 封装聚宽数据API
 """
+import os
 import time
 from typing import Optional
+
+import yaml
 
 # 注意：实际使用时需要安装joinquant-sdk
 # 这里使用占位符，实际部署时替换为真实API调用
@@ -12,6 +15,16 @@ try:
 except ImportError:
     JQ_AVAILABLE = False
     jq = None
+
+
+def _load_config():
+    """从config.yaml加载配置"""
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.yaml')
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f)
+    except Exception:
+        return {}
 
 
 class DataEngine:
@@ -41,14 +54,20 @@ class DataEngine:
         self._data_date: str = None  # 数据日期（用于标注数据来源）
 
         # 聚宽认证（认证失败时自动切换Mock模式）
-        self._use_mock = False
+        self._use_mock = True  # 默认Mock模式
         if JQ_AVAILABLE:
-            import os
+            # 优先从环境变量读取，fallback 到 config.yaml
             username = os.environ.get('JQCLOUD_USERNAME')
             password = os.environ.get('JQCLOUD_PASSWORD')
+            if not username or not password:
+                cfg = _load_config()
+                creds = cfg.get('credentials', {})
+                username = username or creds.get('username', '')
+                password = password or creds.get('password', '')
             if username and password:
                 try:
                     jq.auth(username, password)
+                    self._use_mock = False  # 认证成功，关闭Mock模式
                 except Exception as e:
                     print(f"[DataEngine] 聚宽认证失败 ({e})，切换到Mock模式")
                     self._use_mock = True

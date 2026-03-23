@@ -13,9 +13,9 @@ from datetime import datetime, timedelta
 # 导入回测模块（全局，避免条件导入问题）
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from engines.backtest import BacktestEngine
-from strategies.trend_grid import TrendGridStrategy
-from strategies.ma_crossover import MACrossoverStrategy
+from backtest.runner import BacktestRunner
+from strategies.trend_grid_live import TrendGridStrategy
+# MACrossoverStrategy 暂不存在，延迟导入
 
 
 def analyze_market_trend(prices: pd.Series) -> dict:
@@ -131,13 +131,17 @@ def restart_trading_system():
     """重启交易系统"""
     try:
         # 先调用关闭API
-        post_api('http://127.0.0.1:5000/api/shutdown', {})
+        post_api('http://127.0.0.1:5001/api/shutdown', {})
 
         import time
-        # 等待进程退出
+        import sys
+        # 等待进程退出（跨平台兼容）
         for _ in range(10):
             time.sleep(1)
-            result = subprocess.run(['tasklist'], stdout=subprocess.PIPE, text=True)
+            if sys.platform == 'win32':
+                result = subprocess.run(['tasklist'], stdout=subprocess.PIPE, text=True)
+            else:
+                result = subprocess.run(['ps', 'aux'], stdout=subprocess.PIPE, text=True)
             if 'api_server.py' not in result.stdout:
                 break
 
@@ -310,27 +314,33 @@ def load_config():
 
 def load_settings():
     """从API加载配置（不脱敏）"""
-    return get_api('http://127.0.0.1:5000/api/config/settings')
+    return get_api('http://127.0.0.1:5001/api/config/settings')
 
 def get_api(url):
     try:
-        r = requests.get(url, timeout=5)
+        r = requests.get(url, timeout=15)
         return r.json()
-    except:
+    except Exception as e:
+        import streamlit as st
+        st.warning(f"API请求失败: {e}")
         return None
 
 def post_api(url, data):
     try:
-        r = requests.post(url, json=data, timeout=5)
+        r = requests.post(url, json=data, timeout=15)
         return r.json()
-    except:
+    except Exception as e:
+        import streamlit as st
+        st.warning(f"API请求失败: {e}")
         return None
 
 def put_api(url, data):
     try:
-        r = requests.put(url, json=data, timeout=5)
+        r = requests.put(url, json=data, timeout=15)
         return r.json()
-    except:
+    except Exception as e:
+        import streamlit as st
+        st.warning(f"API请求失败: {e}")
         return None
 
 # ========== 侧边栏 ==========
@@ -345,7 +355,7 @@ with st.sidebar:
     st.markdown("每格金额: ¥500")
     st.divider()
     st.caption("交易API")
-    st.caption("127.0.0.1:5000")
+    st.caption("127.0.0.1:5001")
 
 # ========== 主内容 ==========
 page = st.radio("", ["📊 监控面板", "📊 市场分析", "📈 回测分析", "⚙️ 设置", "📋 日志"], horizontal=True, label_visibility="collapsed")
@@ -354,9 +364,9 @@ page = st.radio("", ["📊 监控面板", "📊 市场分析", "📈 回测分�
 if page == "📊 监控面板":
     st.title("📊 监控面板")
 
-    status_data = get_api('http://127.0.0.1:5000/api/status')
-    risk_data = get_api('http://127.0.0.1:5000/api/risk/status')
-    grid_data = get_api('http://127.0.0.1:5000/api/grid/status')
+    status_data = get_api('http://127.0.0.1:5001/api/status')
+    risk_data = get_api('http://127.0.0.1:5001/api/risk/status')
+    grid_data = get_api('http://127.0.0.1:5001/api/grid/status')
 
     # 第一行 - 核心指标
     col1, col2, col3, col4 = st.columns(4)
@@ -373,6 +383,22 @@ if page == "📊 监控面板":
             st.metric("总资产", f"¥{d['total_assets']:.2f}")
         with col4:
             st.metric("持仓市值", f"¥{d['position_value']:.2f}")
+
+        # 显示数据来源和时间
+        data_info = d.get('data_info', {})
+        data_date = data_info.get('data_date', '')
+        data_source = data_info.get('data_source', '')
+        if data_date:
+            try:
+                from email.utils import parsedate_to_datetime
+                dt = parsedate_to_datetime(data_date)
+                date_str = f"最新数据 {dt.strftime('%Y-%m-%d %H:%M:%S')}"
+            except:
+                date_str = f"最新数据 {data_date[:10]}"
+        else:
+            date_str = ''
+        if date_str and data_source:
+            st.caption(f"📅 {date_str} | 📡 {data_source}")
     else:
         st.error("无法获取数据，请确保交易系统正在运行")
 
@@ -494,13 +520,13 @@ elif page == "⚙️ 设置":
         with col2:
             test_clicked = st.form_submit_button("🧪 发送测试", use_container_width=True)
         if submitted:
-            result = put_api('http://127.0.0.1:5000/api/config/notification', {'server酱_key': server酱_key})
+            result = put_api('http://127.0.0.1:5001/api/config/notification', {'server酱_key': server酱_key})
             if result and result.get('success'):
                 st.success("保存成功!")
             else:
                 st.error("保存失败: 无法连接到交易系统")
         if test_clicked:
-            result = post_api('http://127.0.0.1:5000/api/config/notification/test', {})
+            result = post_api('http://127.0.0.1:5001/api/config/notification/test', {})
             if result and result.get('success'):
                 st.success("发送成功，请检查微信！")
             else:
@@ -549,7 +575,7 @@ elif page == "⚙️ 设置":
             submitted = st.form_submit_button("💾 保存", use_container_width=True)
 
         if submitted:
-            result = put_api('http://127.0.0.1:5000/api/config/ai_model', {
+            result = put_api('http://127.0.0.1:5001/api/config/ai_model', {
                 'provider': provider,
                 'model': model,
                 'api_key': api_key
@@ -594,7 +620,7 @@ elif page == "⚙️ 设置":
         )
         submitted = st.form_submit_button("💾 保存", use_container_width=True)
         if submitted:
-            result = put_api('http://127.0.0.1:5000/api/config/data_source', {'index': index_source})
+            result = put_api('http://127.0.0.1:5001/api/config/data_source', {'index': index_source})
             if result and result.get('success'):
                 st.success("保存成功!")
             else:
@@ -616,13 +642,13 @@ elif page == "⚙️ 设置":
         with col2:
             test_clicked = st.form_submit_button("🧪 测试认证", use_container_width=True)
         if submitted:
-            result = put_api('http://127.0.0.1:5000/api/config/credentials', {'username': username, 'password': password})
+            result = put_api('http://127.0.0.1:5001/api/config/credentials', {'username': username, 'password': password})
             if result and result.get('success'):
                 st.success("保存成功!")
             else:
                 st.error("保存失败: 无法连接到交易系统")
         if test_clicked:
-            result = post_api('http://127.0.0.1:5000/api/config/credentials/test', {})
+            result = post_api('http://127.0.0.1:5001/api/config/credentials/test', {})
             if result and result.get('success'):
                 st.success("认证成功！")
             else:
@@ -631,7 +657,7 @@ elif page == "⚙️ 设置":
     st.divider()
 
     st.subheader("📊 交易策略")
-    strategy_info = get_api('http://127.0.0.1:5000/api/strategy')
+    strategy_info = get_api('http://127.0.0.1:5001/api/strategy')
     if strategy_info and strategy_info.get('success'):
         current = strategy_info['data']['name']
         available = strategy_info['data'].get('available', [])
@@ -640,7 +666,7 @@ elif page == "⚙️ 设置":
         st.markdown("**🤖 AI策略推荐**")
         try:
             # 获取市场数据
-            trend_data = get_api(f'http://127.0.0.1:5000/api/index/trend?code=000300.XSHG&days=60')
+            trend_data = get_api(f'http://127.0.0.1:5001/api/index/trend?code=000300.XSHG&days=60')
             if trend_data and trend_data.get('success'):
                 td = trend_data['data']
                 prices = td.get('prices', [])
@@ -688,7 +714,7 @@ elif page == "⚙️ 设置":
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🔄 切换策略", use_container_width=True):
-                result = put_api('http://127.0.0.1:5000/api/strategy', {'name': selected})
+                result = put_api('http://127.0.0.1:5001/api/strategy', {'name': selected})
                 if result and result.get('success'):
                     st.success(f"已切换为: {strategy_options.get(selected, selected)}")
                     st.rerun()
@@ -757,6 +783,14 @@ elif page == "⚙️ 设置":
 elif page == "📊 市场分析":
     st.title("📊 市场分析")
 
+    # 数据源提示（醒目位置）
+    settings = load_settings()
+    current_source = settings.get('data', {}).get('data_source', {}).get('index', 'akshare') if settings else 'akshare'
+    if current_source == 'mock':
+        st.error("⚠️ 警告：当前为模拟数据模式，数据仅供参考，非真实行情！")
+    elif current_source == 'baostock':
+        st.warning("ℹ️ 提示：Baostock 不支持实时行情，显示的是最近收盘价")
+
     # 预设指数列表
     indices_list = {
         '000001.XSHG': '上证指数',
@@ -772,15 +806,76 @@ elif page == "📊 市场分析":
     tab1, tab2 = st.tabs(["📈 预设指数", "🔍 手动输入"])
 
     with tab1:
-        selected_index = st.selectbox(
-            "选择指数",
-            options=list(indices_list.keys()),
-            index=4,
-            format_func=lambda x: indices_list.get(x, x),
-            key="index_select"
-        )
-        trend_data = get_api(f'http://127.0.0.1:5000/api/index/trend?code={selected_index}&days=120')
         source_label = "指数"
+        # 实时行情（仅 AkShare/聚宽 支持）
+        realtime_sources = ['akshare', 'joinquant']
+        spot_data = None
+        if current_source in realtime_sources:
+            spot_data = get_api('http://127.0.0.1:5001/api/index/spot')
+
+        cols = st.columns(7)
+        if spot_data and spot_data.get('success'):
+            from datetime import datetime
+            update_time = datetime.now().strftime('%H:%M:%S')
+            for i, (code, name) in enumerate(indices_list.items()):
+                idx_code = code.split('.')[0]
+                with cols[i]:
+                    with st.container():
+                        info = spot_data['data'].get(idx_code, {})
+                        if info.get('price'):
+                            price = info['price']
+                            change_pct = info['change_pct']
+                            change_val = info['change_val']
+                            change_emoji = "🔴" if change_pct < 0 else "🟢"
+                            st.metric(name, f"{price:.2f}", f"{change_emoji} {change_pct:+.2f}%")
+                        else:
+                            st.metric(name, "暂无数据")
+            # 统一显示数据时间和来源
+            source_name = {'akshare': 'AkShare(东方财富)', 'joinquant': '聚宽', 'baostock': 'Baostock', 'mock': '模拟数据'}.get(current_source, current_source)
+            st.caption(f"⏰ 实时行情 {update_time} | 📡 数据来源: {source_name} | 👆「手动输入」查询个股")
+        else:
+            # 不支持实时行情，显示最近收盘价（提示已在顶部显示）
+            # 先收集所有指数数据
+            all_trend_data = {}
+            latest_date = ''
+            for code, name in indices_list.items():
+                trend_data = get_api(f'http://127.0.0.1:5001/api/index/trend?code={code}&days=2')
+                if trend_data and trend_data.get('success'):
+                    td = trend_data['data']
+                    all_trend_data[code] = {'name': name, 'td': td}
+                    dates = td.get('dates', [])
+                    if dates:
+                        latest_date = dates[-1][:10]
+
+            for i, (code, name) in enumerate(indices_list.items()):
+                with cols[i]:
+                    with st.container():
+                        if code in all_trend_data:
+                            td = all_trend_data[code]['td']
+                            prices = td.get('prices', [])
+                            current_price = prices[-1] if prices else 0
+                            change_pct = 0
+                            if len(prices) >= 2:
+                                change_pct = (prices[-1] - prices[-2]) / prices[-2] * 100
+                            change_emoji = "🔴" if change_pct < 0 else "🟢"
+                            st.metric(name, f"{current_price:.2f}", f"{change_emoji} {change_pct:+.2f}%")
+                        else:
+                            st.metric(name, "暂无数据")
+            # 统一显示数据时间
+            source_name = {'akshare': 'AkShare', 'joinquant': '聚宽', 'baostock': 'Baostock', 'mock': '模拟数据'}.get(current_source, current_source)
+            # 格式化日期
+            if latest_date:
+                try:
+                    # 处理 "Fri, 20 Mar 2026" 格式
+                    from email.utils import parsedate_to_datetime
+                    dt = parsedate_to_datetime(latest_date)
+                    date_str = f"最新收盘 {dt.strftime('%Y-%m-%d %H:%M:%S')}"
+                except:
+                    # 已经是 YYYY-MM-DD 格式
+                    date_str = f"最新收盘 {latest_date[:10]}"
+            else:
+                date_str = ''
+            st.caption(f"📅 {date_str} | 📡 数据来源: {source_name} | 👆「手动输入」查询个股")
 
     with tab2:
         stock_code = st.text_input(
@@ -791,7 +886,7 @@ elif page == "📊 市场分析":
         )
         days_input = st.slider("分析天数", 20, 250, 120, key="stock_days")
         if stock_code:
-            trend_data = get_api(f'http://127.0.0.1:5000/api/stock/trend?code={stock_code}&days={days_input}')
+            trend_data = get_api(f'http://127.0.0.1:5001/api/stock/trend?code={stock_code}&days={days_input}')
             source_label = "股票"
         else:
             trend_data = None
@@ -1139,7 +1234,7 @@ elif page == "📈 回测分析":
             with st.spinner("正在获取历史数据..."):
                 try:
                     # 获取历史数据
-                    status = get_api('http://127.0.0.1:5000/api/status')
+                    status = get_api('http://127.0.0.1:5001/api/status')
                     if status and status.get('success'):
                         current_price = status['data']['current_price']
 
@@ -1162,39 +1257,14 @@ elif page == "📈 回测分析":
 
                         # 根据选择的策略运行回测
                         if backtest_strategy == 'grid':
-                            engine = BacktestEngine(
-                                initial_capital=initial_capital,
-                                grid_levels=grid_levels,
-                                grid_spacing=grid_spacing,
-                                commission_rate=commission_rate,
-                                slippage_rate=slippage_rate
-                            )
-                            result = engine.run(price_data)
+                            engine = BacktestRunner({'grid': {'levels': grid_levels, 'spacing': grid_spacing}, 'risk': self.risk_config})
+                            result = engine.run(price_data, dates)
                         elif backtest_strategy == 'ma_crossover':
-                            # 均线交叉策略回测
-                            from strategies.ma_crossover import MACrossoverStrategy
-                            strategy = MACrossoverStrategy(
-                                initial_capital=initial_capital,
-                                fast_ma=fast_ma,
-                                slow_ma=slow_ma,
-                                commission_rate=commission_rate,
-                                slippage_rate=slippage_rate
-                            )
-                            result = strategy.run(price_data)
+                            st.error("均线交叉策略暂不可用")
                         else:
                             # 趋势网格策略回测
-                            strategy = TrendGridStrategy(
-                                initial_capital=initial_capital,
-                                grid_levels=grid_levels,
-                                grid_spacing=grid_spacing,
-                                unit_size=100,
-                                commission_rate=commission_rate,
-                                slippage_rate=slippage_rate,
-                                ma_period=ma_period,
-                                trend_threshold=trend_threshold,
-                                confirm_days=1
-                            )
-                            result = strategy.run(price_data)
+                            engine = BacktestRunner({'grid': {'levels': grid_levels, 'spacing': grid_spacing}, 'risk': self.risk_config})
+                            result = engine.run(price_data, dates)
 
                         # 添加网格配置信息
                         result['grid_config'] = {
@@ -1221,7 +1291,7 @@ elif page == "📈 回测分析":
             with st.spinner("正在获取历史数据..."):
                 try:
                     # 获取历史数据
-                    status = get_api('http://127.0.0.1:5000/api/status')
+                    status = get_api('http://127.0.0.1:5001/api/status')
                     if status and status.get('success'):
                         current_price = status['data']['current_price']
 
@@ -1243,14 +1313,8 @@ elif page == "📈 回测分析":
                         })
 
                         # 运行回测
-                        engine = BacktestEngine(
-                            initial_capital=initial_capital,
-                            grid_levels=grid_levels,
-                            grid_spacing=grid_spacing,
-                            commission_rate=commission_rate,
-                            slippage_rate=slippage_rate
-                        )
-                        result = engine.run(price_data)
+                        engine = BacktestRunner({'grid': {'levels': grid_levels, 'spacing': grid_spacing}, 'risk': {}})
+                        result = engine.run(price_data, dates)
                         st.session_state['backtest_result'] = result
                         st.session_state['backtest_params'] = {
                             'start_date': str(start_date),
@@ -1606,13 +1670,7 @@ elif page == "📈 回测分析":
                 st.markdown("### 🔬 参数敏感性分析")
 
                 with st.spinner("正在测试不同参数组合..."):
-                    engine = BacktestEngine(
-                        initial_capital=initial_capital,
-                        grid_levels=10,
-                        grid_spacing=0.05,
-                        commission_rate=commission_rate,
-                        slippage_rate=slippage_rate
-                    )
+                    engine = BacktestRunner({'grid': {'levels': 10, 'spacing': 0.05}, 'risk': {}})
 
                     # 获取模拟数据
                     import pandas as pd
@@ -1659,7 +1717,7 @@ elif page == "📋 日志":
     if st.button("刷新"):
         st.rerun()
 
-    logs_data = get_api('http://127.0.0.1:5000/api/logs?lines=100')
+    logs_data = get_api('http://127.0.0.1:5001/api/logs?lines=100')
 
     if logs_data and logs_data.get('success'):
         st.markdown(f"**文件**: `{logs_data['data']['log_file']}`")

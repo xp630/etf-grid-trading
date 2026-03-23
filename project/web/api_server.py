@@ -92,6 +92,20 @@ def create_api_server(config_path: str = None):
     notifier = Notifier(config['notification'].get('server酱_key', ''))
     execution = ExecutionEngine(tracker, risk, data)
 
+    # 启动配置汇总
+    creds = config.get('credentials', {})
+    uname = creds.get('username', '')
+    notif_key = config['notification'].get('server酱_key', '')
+    logger.info(
+        f"启动配置: ETF={config['market']['etf_code']} "
+        f"数据源={config.get('data_source', {}).get('index', 'N/A')} "
+        f"账号={uname[:3]}*** {'已配置' if uname else '未配置'} "
+        f"网格={config['grid']['levels']}档/{config['grid']['spacing']*100:.1f}%/{config['grid']['unit_size']}元 "
+        f"持仓<={config['risk']['max_position']}元 "
+        f"日亏熔断={config['risk']['max_daily_loss']}元 总止损={config['risk']['total_stop_loss']}元 "
+        f"通知={'有' if notif_key else '无'}"
+    )
+
     # 策略映射
     STRATEGIES = {
         'grid': {
@@ -243,6 +257,7 @@ def create_api_server(config_path: str = None):
             current_price = data.get_current_price()
             initial_capital = config['risk']['initial_capital']
             total_assets = initial_capital + daily_pnl
+            data_info = data.get_data_info()
 
             return jsonify({
                 'success': True,
@@ -264,7 +279,8 @@ def create_api_server(config_path: str = None):
                         'price': t['price'],
                         'quantity': t['quantity'],
                         'timestamp': t['timestamp']
-                    } for t in tracker.get_trades(limit=5)]
+                    } for t in tracker.get_trades(limit=5)],
+                    'data_info': data_info
                 }
             })
         except Exception as e:
@@ -460,6 +476,29 @@ def create_api_server(config_path: str = None):
                 }
             })
 
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+
+    @app.route('/api/index/spot', methods=['GET'])
+    def get_index_spot():
+        """获取预设指数实时行情（东方财富）"""
+        try:
+            import akshare as ak
+            df = ak.stock_zh_index_spot_em()
+            # 筛选主要指数
+            indices = ['000001', '399001', '399006', '000688', '000300', '000016', '000905']
+            result = {}
+            for idx in indices:
+                row = df[df['代码'] == idx]
+                if not row.empty:
+                    r = row.iloc[0]
+                    result[idx] = {
+                        'name': r['名称'],
+                        'price': float(r['最新价']) if r['最新价'] != '-' else None,
+                        'change_pct': float(r['涨跌幅']) if r['涨跌幅'] != '-' else 0,
+                        'change_val': float(r['涨跌额']) if r['涨跌额'] != '-' else 0,
+                    }
+            return jsonify({'success': True, 'data': result})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)})
 
@@ -773,7 +812,7 @@ def create_api_server(config_path: str = None):
     return app, logger
 
 
-def run_api_server(config_path: str = None, port: int = 5000):
+def run_api_server(config_path: str = None, port: int = 5001):
     """运行API服务器"""
     app, logger = create_api_server(config_path)
     logger.info(f"启动API服务器 on port {port}...")
