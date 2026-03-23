@@ -76,7 +76,7 @@ class BaostockDataSource(BaseDataSource):
         rs = bs.query_history_k_data_plus(
             bs_code, "date,close",
             start_date=start_date, end_date=end_date,
-            frequency="d", adjust="qfq"
+            frequency="d"
         )
 
         data_list = []
@@ -92,25 +92,25 @@ class BaostockDataSource(BaseDataSource):
         return price
 
     def get_baseline_price(self) -> float:
-        """获取基准价（前一日收盘）"""
+        """获取基准价（前一日收盘），往前找最近的有效交易日"""
         self._ensure_login()
-        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
         bs_code = self._to_bs_code(self.symbol)
 
-        rs = bs.query_history_k_data_plus(
-            bs_code, "date,close",
-            start_date=yesterday, end_date=yesterday,
-            frequency="d", adjust="qfq"
-        )
+        # 往前最多找 7 天（覆盖周末和假期）
+        for days_back in range(1, 8):
+            check_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
+            rs = bs.query_history_k_data_plus(
+                bs_code, "date,close",
+                start_date=check_date, end_date=check_date,
+                frequency="d"
+            )
+            data_list = []
+            while rs.error_code == '0' and rs.next():
+                data_list.append(rs.get_row_data())
+            if data_list:
+                return float(data_list[0][1])
 
-        data_list = []
-        while rs.error_code == '0' and rs.next():
-            data_list.append(rs.get_row_data())
-
-        if not data_list:
-            raise RuntimeError(f"Baostock返回空数据（基准价）: {self.symbol}")
-
-        return float(data_list[0][1])
+        raise RuntimeError(f"Baostock返回空数据（基准价，7天内无交易数据）: {self.symbol}")
 
     def is_market_open(self) -> bool:
         """检查市场是否开盘"""
@@ -137,7 +137,7 @@ class BaostockDataSource(BaseDataSource):
         rs = bs.query_history_k_data_plus(
             bs_code, "date,close",
             start_date=start_date, end_date=end_date,
-            frequency="d", adjust="qfq"
+            frequency="d"
         )
 
         data_list = []

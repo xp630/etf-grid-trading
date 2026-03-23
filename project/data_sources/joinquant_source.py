@@ -4,6 +4,8 @@ JoinQuant数据源 - 使用聚宽API获取行情数据
 from typing import Optional, List
 from datetime import datetime, timedelta
 import logging
+import os
+import yaml
 
 try:
     import jqdatasdk as jq
@@ -43,17 +45,32 @@ class JoinQuantDataSource(BaseDataSource):
         self._authenticate()
         self._init_date_range()
 
+    def _load_config(self) -> dict:
+        """从 config.yaml 加载配置"""
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.yaml')
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return yaml.safe_load(f)
+        except Exception:
+            return {}
+
     def _authenticate(self):
         """聚宽认证"""
         if not JQ_AVAILABLE:
             raise ImportError("jqdatasdk 未安装，请运行: pip install jqdatasdk")
 
-        import os
+        # 优先从环境变量读取，fallback 到 config.yaml
         username = os.environ.get('JQCLOUD_USERNAME')
         password = os.environ.get('JQCLOUD_PASSWORD')
 
         if not username or not password:
-            raise RuntimeError("未设置 JQCLOUD_USERNAME/JQCLOUD_PASSWORD 环境变量")
+            cfg = self._load_config()
+            creds = cfg.get('credentials', {}) if cfg else {}
+            username = username or creds.get('username', '')
+            password = password or creds.get('password', '')
+
+        if not username or not password:
+            raise RuntimeError("未设置 JQCLOUD_USERNAME/JQCLOUD_PASSWORD 环境变量（或 config.yaml credentials）")
 
         try:
             jq.auth(username, password)

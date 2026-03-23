@@ -13,7 +13,7 @@ credentials:
   password: Yhl@850125
   username: '18608130915'
 data_source:
-  index: akshare
+  index: baostock
   provider: joinquant
 database:
   path: data/trading.db
